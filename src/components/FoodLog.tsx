@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, parseISO, isToday } from 'date-fns'
-import { Utensils, Plus, Trash2, AlertTriangle, ShieldCheck, AlertCircle } from 'lucide-react'
+import { Utensils, Plus, Trash2, AlertTriangle, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react'
 import type { FoodEntry, FoodRisk } from '../types'
+import { classifyFood } from '../lib/foodClassifier'
 
-const RISK_CONFIG: Record<FoodRisk, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
-  safe: { label: 'Safe', color: 'text-green-700', bg: 'bg-green-50 border-green-200', Icon: ShieldCheck },
-  caution: { label: 'Caution', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', Icon: AlertCircle },
-  risky: { label: 'Risky', color: 'text-red-700', bg: 'bg-red-50 border-red-200', Icon: AlertTriangle },
+const RISK_CONFIG: Record<FoodRisk, { label: string; color: string; bg: string; border: string; Icon: React.ElementType }> = {
+  safe:    { label: 'Safe',    color: 'text-green-700', bg: 'bg-green-50',  border: 'border-green-200', Icon: ShieldCheck },
+  caution: { label: 'Caution', color: 'text-amber-700', bg: 'bg-amber-50',  border: 'border-amber-200', Icon: AlertCircle },
+  risky:   { label: 'Risky',   color: 'text-red-700',   bg: 'bg-red-50',    border: 'border-red-200',   Icon: AlertTriangle },
 }
 
-const COMMON_RISKY_FOODS = [
-  'Dairy', 'Gluten', 'Spicy food', 'Raw vegetables', 'Cruciferous veg',
-  'Beans/legumes', 'Nuts', 'Seeds', 'Alcohol', 'Coffee', 'Fried food',
-  'Red meat', 'Artificial sweeteners', 'High-fiber foods', 'Carbonated drinks',
+const QUICK_ADDS = [
+  'Coffee', 'White rice', 'Banana', 'Chicken breast', 'Salmon',
+  'Broccoli', 'Beer', 'Yogurt', 'Eggs', 'Spicy food',
+  'French fries', 'Oatmeal', 'Apple', 'Pasta', 'Red meat',
 ]
 
 interface Props {
@@ -24,15 +25,37 @@ interface Props {
 export default function FoodLog({ entries, onAdd, onDelete }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
-  const [risk, setRisk] = useState<FoodRisk>('safe')
+  const [classification, setClassification] = useState<{ risk: FoodRisk; reason: string } | null>(null)
+  const [overrideRisk, setOverrideRisk] = useState<FoodRisk | null>(null)
   const [notes, setNotes] = useState('')
   const [timestamp, setTimestamp] = useState(() => {
     const now = new Date()
     return `${format(now, 'yyyy-MM-dd')}T${format(now, 'HH:mm')}`
   })
 
+  // Auto-classify whenever name changes (debounced)
+  useEffect(() => {
+    setOverrideRisk(null)
+    if (!name.trim()) {
+      setClassification(null)
+      return
+    }
+    const t = setTimeout(() => {
+      setClassification(classifyFood(name))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [name])
+
+  const effectiveRisk: FoodRisk = overrideRisk ?? classification?.risk ?? 'caution'
+  const config = RISK_CONFIG[effectiveRisk]
+
   const todayEntries = entries.filter(e => isToday(parseISO(e.timestamp)))
   const todayRisky = todayEntries.filter(e => e.risk === 'risky').length
+
+  function handleQuickAdd(food: string) {
+    setName(food)
+    setShowForm(true)
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,12 +64,13 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
       id: crypto.randomUUID(),
       timestamp: new Date(timestamp).toISOString(),
       name: name.trim(),
-      risk,
-      notes,
+      risk: effectiveRisk,
+      notes: notes.trim() || (classification?.reason ?? ''),
     })
     setName('')
     setNotes('')
-    setRisk('safe')
+    setClassification(null)
+    setOverrideRisk(null)
     setShowForm(false)
     setTimestamp(`${format(new Date(), 'yyyy-MM-dd')}T${format(new Date(), 'HH:mm')}`)
   }
@@ -79,66 +103,105 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
         </div>
       </div>
 
+      {/* Quick-add chips */}
+      {!showForm && (
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Quick add</p>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_ADDS.map(food => {
+              const { risk } = classifyFood(food)
+              const c = RISK_CONFIG[risk]
+              return (
+                <button
+                  key={food}
+                  onClick={() => handleQuickAdd(food)}
+                  className={`text-sm px-3 py-1.5 rounded-full border font-medium transition-colors ${c.bg} ${c.border} ${c.color}`}
+                >
+                  {food}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Add form */}
       {showForm && (
         <div className="card">
-          <h3 className="font-semibold text-slate-700 mb-3">Log Food</h3>
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Food name input */}
             <div>
-              <label className="label">Food / Drink *</label>
+              <label className="label">What did you eat or drink?</label>
               <input
-                className="input"
+                className="input text-base"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Greek yogurt, Coffee, Salad..."
+                placeholder="e.g. Greek yogurt, Coffee, Grilled salmon..."
+                autoFocus
                 required
               />
-              <div className="flex flex-wrap gap-1 mt-2">
-                {COMMON_RISKY_FOODS.map(f => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setName(f)}
-                    className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors"
-                  >
-                    {f}
-                  </button>
-                ))}
+            </div>
+
+            {/* AI classification result */}
+            {classification && name.trim() && (
+              <div className={`rounded-lg p-3 border ${config.bg} ${config.border}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={13} className={config.color} />
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${config.color}`}>
+                    Auto-detected: {config.label}
+                  </span>
+                </div>
+                {classification.reason && (
+                  <p className={`text-xs ${config.color} opacity-80`}>{classification.reason}</p>
+                )}
+                {/* Override buttons */}
+                <div className="flex gap-1.5 mt-2">
+                  <span className="text-xs text-slate-400 self-center">Override:</span>
+                  {(Object.entries(RISK_CONFIG) as [FoodRisk, typeof RISK_CONFIG[FoodRisk]][]).map(([value, c]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setOverrideRisk(overrideRisk === value ? null : value)}
+                      className={`text-xs px-2 py-0.5 rounded border transition-all ${
+                        effectiveRisk === value && overrideRisk === value
+                          ? `${c.bg} ${c.border} ${c.color} font-semibold`
+                          : 'bg-white border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div>
-              <label className="label">Risk Level</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.entries(RISK_CONFIG) as [FoodRisk, typeof RISK_CONFIG[FoodRisk]][]).map(([value, config]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setRisk(value)}
-                    className={`p-2.5 rounded-lg border-2 text-center transition-all ${
-                      risk === value ? `${config.bg} border-current ${config.color}` : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                    }`}
-                  >
-                    <config.Icon size={18} className="mx-auto mb-1" />
-                    <span className="text-xs font-medium">{config.label}</span>
-                  </button>
-                ))}
+            {/* Time — collapsed by default */}
+            <details className="text-sm">
+              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">
+                Adjust time (optional)
+              </summary>
+              <div className="mt-2">
+                <input type="datetime-local" className="input" value={timestamp} onChange={e => setTimestamp(e.target.value)} />
               </div>
-            </div>
+            </details>
 
-            <div>
-              <label className="label">Time</label>
-              <input type="datetime-local" className="input" value={timestamp} onChange={e => setTimestamp(e.target.value)} />
-            </div>
-
-            <div>
-              <label className="label">Notes</label>
-              <input className="input" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Portion size, how you felt after..." />
-            </div>
+            {/* Notes — collapsed by default */}
+            <details className="text-sm">
+              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">
+                Add notes (optional)
+              </summary>
+              <div className="mt-2">
+                <input className="input" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Portion size, how you felt after..." />
+              </div>
+            </details>
 
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button type="submit" className="btn-primary">Save</button>
+              <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setName(''); setClassification(null) }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={!name.trim()}>
+                Save
+              </button>
             </div>
           </form>
         </div>
@@ -153,15 +216,15 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
           .slice()
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
           .map(entry => {
-            const config = RISK_CONFIG[entry.risk]
+            const c = RISK_CONFIG[entry.risk]
             return (
-              <div key={entry.id} className={`card border flex items-start gap-3 ${config.bg}`}>
-                <config.Icon size={18} className={`shrink-0 mt-0.5 ${config.color}`} />
+              <div key={entry.id} className={`card border flex items-start gap-3 ${c.bg} ${c.border}`}>
+                <c.Icon size={18} className={`shrink-0 mt-0.5 ${c.color}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-slate-800">{entry.name}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.color} ${config.bg} border ${config.bg.replace('bg-', 'border-').replace('50', '200')}`}>
-                      {config.label}
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium border ${c.bg} ${c.border} ${c.color}`}>
+                      {c.label}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{format(parseISO(entry.timestamp), 'MMM d, h:mm a')}</p>
