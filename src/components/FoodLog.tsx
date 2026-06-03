@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { format, parseISO, isToday } from 'date-fns'
-import { Utensils, Plus, Trash2, AlertTriangle, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react'
+import { Utensils, Plus, Trash2, AlertTriangle, ShieldCheck, AlertCircle, Tag } from 'lucide-react'
 import type { FoodEntry, FoodRisk } from '../types'
 import { classifyFood } from '../lib/foodClassifier'
 
@@ -25,7 +25,7 @@ interface Props {
 export default function FoodLog({ entries, onAdd, onDelete }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
-  const [classification, setClassification] = useState<{ risk: FoodRisk; reason: string } | null>(null)
+  const [classification, setClassification] = useState<ReturnType<typeof classifyFood> | null>(null)
   const [overrideRisk, setOverrideRisk] = useState<FoodRisk | null>(null)
   const [notes, setNotes] = useState('')
   const [timestamp, setTimestamp] = useState(() => {
@@ -33,16 +33,10 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
     return `${format(now, 'yyyy-MM-dd')}T${format(now, 'HH:mm')}`
   })
 
-  // Auto-classify whenever name changes (debounced)
   useEffect(() => {
     setOverrideRisk(null)
-    if (!name.trim()) {
-      setClassification(null)
-      return
-    }
-    const t = setTimeout(() => {
-      setClassification(classifyFood(name))
-    }, 300)
+    if (!name.trim()) { setClassification(null); return }
+    const t = setTimeout(() => setClassification(classifyFood(name)), 300)
     return () => clearTimeout(t)
   }, [name])
 
@@ -65,13 +59,10 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
       timestamp: new Date(timestamp).toISOString(),
       name: name.trim(),
       risk: effectiveRisk,
-      notes: notes.trim() || (classification?.reason ?? ''),
+      category: classification?.category ?? '',
+      notes: notes.trim(),
     })
-    setName('')
-    setNotes('')
-    setClassification(null)
-    setOverrideRisk(null)
-    setShowForm(false)
+    setName(''); setNotes(''); setClassification(null); setOverrideRisk(null); setShowForm(false)
     setTimestamp(`${format(new Date(), 'yyyy-MM-dd')}T${format(new Date(), 'HH:mm')}`)
   }
 
@@ -112,11 +103,8 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
               const { risk } = classifyFood(food)
               const c = RISK_CONFIG[risk]
               return (
-                <button
-                  key={food}
-                  onClick={() => handleQuickAdd(food)}
-                  className={`text-sm px-3 py-1.5 rounded-full border font-medium transition-colors ${c.bg} ${c.border} ${c.color}`}
-                >
+                <button key={food} onClick={() => handleQuickAdd(food)}
+                  className={`text-sm px-3 py-1.5 rounded-full border font-medium transition-colors ${c.bg} ${c.border} ${c.color}`}>
                   {food}
                 </button>
               )
@@ -129,45 +117,44 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
       {showForm && (
         <div className="card">
           <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Food name input */}
             <div>
               <label className="label">What did you eat or drink?</label>
               <input
                 className="input text-base"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Greek yogurt, Coffee, Grilled salmon..."
+                placeholder="e.g. Mapo tofu, Chicken fingers, Beer..."
                 autoFocus
                 required
               />
             </div>
 
-            {/* AI classification result */}
+            {/* Classification result */}
             {classification && name.trim() && (
               <div className={`rounded-lg p-3 border ${config.bg} ${config.border}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <Sparkles size={13} className={config.color} />
-                  <span className={`text-xs font-semibold uppercase tracking-wide ${config.color}`}>
-                    Auto-detected: {config.label}
-                  </span>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <config.Icon size={15} className={config.color} />
+                  <span className={`font-semibold text-sm ${config.color}`}>{config.label}</span>
+                  {classification.category && classification.category !== 'Unknown' && (
+                    <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${config.bg} ${config.border} ${config.color}`}>
+                      <Tag size={10} />
+                      {classification.category}
+                    </span>
+                  )}
                 </div>
                 {classification.reason && (
-                  <p className={`text-xs ${config.color} opacity-80`}>{classification.reason}</p>
+                  <p className={`text-xs ${config.color} opacity-80 leading-relaxed`}>{classification.reason}</p>
                 )}
-                {/* Override buttons */}
-                <div className="flex gap-1.5 mt-2">
-                  <span className="text-xs text-slate-400 self-center">Override:</span>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-xs text-slate-400">Override:</span>
                   {(Object.entries(RISK_CONFIG) as [FoodRisk, typeof RISK_CONFIG[FoodRisk]][]).map(([value, c]) => (
-                    <button
-                      key={value}
-                      type="button"
+                    <button key={value} type="button"
                       onClick={() => setOverrideRisk(overrideRisk === value ? null : value)}
                       className={`text-xs px-2 py-0.5 rounded border transition-all ${
                         effectiveRisk === value && overrideRisk === value
                           ? `${c.bg} ${c.border} ${c.color} font-semibold`
                           : 'bg-white border-slate-200 text-slate-500'
-                      }`}
-                    >
+                      }`}>
                       {c.label}
                     </button>
                   ))}
@@ -175,33 +162,26 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
               </div>
             )}
 
-            {/* Time — collapsed by default */}
             <details className="text-sm">
-              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">
-                Adjust time (optional)
-              </summary>
+              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">Adjust time</summary>
               <div className="mt-2">
                 <input type="datetime-local" className="input" value={timestamp} onChange={e => setTimestamp(e.target.value)} />
               </div>
             </details>
 
-            {/* Notes — collapsed by default */}
             <details className="text-sm">
-              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">
-                Add notes (optional)
-              </summary>
+              <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-xs select-none">Add notes</summary>
               <div className="mt-2">
                 <input className="input" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Portion size, how you felt after..." />
               </div>
             </details>
 
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setName(''); setClassification(null) }}>
+              <button type="button" className="btn-secondary"
+                onClick={() => { setShowForm(false); setName(''); setClassification(null) }}>
                 Cancel
               </button>
-              <button type="submit" className="btn-primary" disabled={!name.trim()}>
-                Save
-              </button>
+              <button type="submit" className="btn-primary" disabled={!name.trim()}>Save</button>
             </div>
           </form>
         </div>
@@ -223,9 +203,14 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-slate-800">{entry.name}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium border ${c.bg} ${c.border} ${c.color}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${c.bg} ${c.border} ${c.color}`}>
                       {c.label}
                     </span>
+                    {entry.category && (
+                      <span className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border font-medium ${c.bg} ${c.border} ${c.color} opacity-80`}>
+                        <Tag size={9} />{entry.category}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{format(parseISO(entry.timestamp), 'MMM d, h:mm a')}</p>
                   {entry.notes && <p className="text-xs text-slate-500 italic mt-0.5">{entry.notes}</p>}

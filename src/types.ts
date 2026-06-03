@@ -36,6 +36,7 @@ export interface FoodEntry {
   timestamp: string
   name: string
   risk: FoodRisk
+  category: string
   notes: string
 }
 
