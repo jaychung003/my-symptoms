@@ -1,12 +1,22 @@
 import { useState } from 'react'
-import { format, parseISO, isToday } from 'date-fns'
-import { Pill, Plus, Trash2, Check } from 'lucide-react'
+import { format, parseISO, isToday, subMinutes, subHours } from 'date-fns'
+import { Pill, Plus, Trash2, Check, Clock } from 'lucide-react'
 import type { Medication, MedicationLog } from '../types'
 
 const MED_COLORS = [
   'bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500',
   'bg-rose-500', 'bg-teal-500', 'bg-indigo-500', 'bg-orange-500',
 ]
+
+const TIME_SHORTCUTS = [
+  { label: 'Now',     offset: () => new Date() },
+  { label: '15m ago', offset: () => subMinutes(new Date(), 15) },
+  { label: '30m ago', offset: () => subMinutes(new Date(), 30) },
+  { label: '1hr ago', offset: () => subHours(new Date(), 1) },
+]
+
+function toTimeInput(d: Date) { return format(d, 'HH:mm') }
+function toDateInput(d: Date) { return format(d, 'yyyy-MM-dd') }
 
 interface Props {
   medications: Medication[]
@@ -23,10 +33,20 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
   const [dosage, setDosage] = useState('')
   const [frequency, setFrequency] = useState('')
   const [color, setColor] = useState(MED_COLORS[0])
-  // Track which med IDs were just tapped (for brief animation feedback)
   const [justLogged, setJustLogged] = useState<Set<string>>(new Set())
 
+  // Time picker state
+  const [showTimePicker, setShowTimePicker] = useState<string | null>(null)
+  const [pickerTime, setPickerTime] = useState('')
+  const [pickerDate, setPickerDate] = useState('')
+  const [activeShortcut, setActiveShortcut] = useState<number | null>(null)
+
   const todayLogs = logs.filter(l => isToday(parseISO(l.timestamp)))
+
+  function flashMed(medId: string) {
+    setJustLogged(prev => new Set(prev).add(medId))
+    setTimeout(() => setJustLogged(prev => { const s = new Set(prev); s.delete(medId); return s }), 1200)
+  }
 
   function logNow(medId: string) {
     onLogDose({
@@ -35,8 +55,28 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
       timestamp: new Date().toISOString(),
       notes: '',
     })
-    setJustLogged(prev => new Set(prev).add(medId))
-    setTimeout(() => setJustLogged(prev => { const s = new Set(prev); s.delete(medId); return s }), 1200)
+    flashMed(medId)
+  }
+
+  function openTimePicker(medId: string) {
+    const now = new Date()
+    setShowTimePicker(medId)
+    setPickerTime(toTimeInput(now))
+    setPickerDate(toDateInput(now))
+    setActiveShortcut(0)
+  }
+
+  function logWithTime(medId: string) {
+    if (!pickerTime || !pickerDate) return
+    const ts = new Date(`${pickerDate}T${pickerTime}`).toISOString()
+    onLogDose({
+      id: crypto.randomUUID(),
+      medicationId: medId,
+      timestamp: ts,
+      notes: '',
+    })
+    setShowTimePicker(null)
+    flashMed(medId)
   }
 
   function handleAddMed(e: React.FormEvent) {
@@ -63,7 +103,6 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
         </button>
       </div>
 
-      {/* One-tap log cards */}
       {medications.length === 0 && !showMedForm && (
         <p className="text-center text-slate-400 py-8">No medications added yet.</p>
       )}
@@ -74,47 +113,120 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
             const count = todayCount(med.id)
             const lastTime = lastTakenToday(med.id)
             const flash = justLogged.has(med.id)
+            const pickerOpen = showTimePicker === med.id
             return (
-              <button
+              <div
                 key={med.id}
-                type="button"
-                onClick={() => logNow(med.id)}
-                className={`w-full card flex items-center gap-3 text-left transition-all active:scale-95 ${
-                  flash ? 'bg-green-50 border-green-300' : count > 0 ? 'bg-slate-50' : 'bg-white'
-                }`}
+                className={`card transition-all ${flash ? 'bg-green-50 border-green-300' : count > 0 ? 'bg-slate-50' : 'bg-white'}`}
               >
-                {/* Color dot */}
-                <div className={`w-11 h-11 rounded-full ${med.color} flex items-center justify-center shrink-0 transition-all ${flash ? 'scale-110' : ''}`}>
-                  {flash
-                    ? <Check size={20} className="text-white" strokeWidth={3} />
-                    : <Pill size={18} className="text-white" />
-                  }
+                {/* Main tap row */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { if (!pickerOpen) logNow(med.id) }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!pickerOpen) logNow(med.id) } }}
+                  className="flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform select-none"
+                >
+                  {/* Color dot */}
+                  <div className={`w-11 h-11 rounded-full ${med.color} flex items-center justify-center shrink-0 transition-all ${flash ? 'scale-110' : ''}`}>
+                    {flash
+                      ? <Check size={20} className="text-white" strokeWidth={3} />
+                      : <Pill size={18} className="text-white" />
+                    }
+                  </div>
+                  {/* Name + info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800">{med.name}</p>
+                    {(med.dosage || med.frequency) && (
+                      <p className="text-xs text-slate-500">{[med.dosage, med.frequency].filter(Boolean).join(' · ')}</p>
+                    )}
+                    {lastTime && (
+                      <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
+                        <Check size={10} />
+                        {count > 1 ? `${count}× today · last at ${lastTime}` : `Taken at ${lastTime}`}
+                      </p>
+                    )}
+                    {!lastTime && !pickerOpen && (
+                      <p className="text-xs text-slate-400 mt-0.5">Tap to log now</p>
+                    )}
+                  </div>
+                  {/* Right side: check circle + clock */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation()
+                        pickerOpen ? setShowTimePicker(null) : openTimePicker(med.id)
+                      }}
+                      className={`p-1.5 rounded-full transition-colors ${pickerOpen ? 'text-sky-500 bg-sky-50' : 'text-slate-300 hover:text-sky-500'}`}
+                      title="Log at a different time"
+                    >
+                      <Clock size={15} />
+                    </button>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
+                      count > 0 ? 'bg-green-500 border-green-500' : 'bg-white border-slate-200'
+                    }`}>
+                      <Check size={16} className={count > 0 ? 'text-white' : 'text-slate-300'} strokeWidth={3} />
+                    </div>
+                  </div>
                 </div>
-                {/* Name + info */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800">{med.name}</p>
-                  {(med.dosage || med.frequency) && (
-                    <p className="text-xs text-slate-500">{[med.dosage, med.frequency].filter(Boolean).join(' · ')}</p>
-                  )}
-                  {lastTime && (
-                    <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
-                      <Check size={10} />
-                      {count > 1 ? `${count}× today · last at ${lastTime}` : `Taken at ${lastTime}`}
-                    </p>
-                  )}
-                  {!lastTime && (
-                    <p className="text-xs text-slate-400 mt-0.5">Tap to log now</p>
-                  )}
-                </div>
-                {/* Big tap affordance */}
-                <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
-                  count > 0
-                    ? 'bg-green-500 border-green-500'
-                    : 'bg-white border-slate-200'
-                }`}>
-                  <Check size={16} className={count > 0 ? 'text-white' : 'text-slate-300'} strokeWidth={3} />
-                </div>
-              </button>
+
+                {/* Inline time picker */}
+                {pickerOpen && (
+                  <div className="border-t border-slate-100 pt-3 mt-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">When was it taken?</p>
+                    {/* Shortcuts */}
+                    <div className="flex gap-1.5 flex-wrap">
+                      {TIME_SHORTCUTS.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const d = s.offset()
+                            setPickerTime(toTimeInput(d))
+                            setPickerDate(toDateInput(d))
+                            setActiveShortcut(i)
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            activeShortcut === i
+                              ? 'bg-sky-500 border-sky-500 text-white'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Time input */}
+                    <input
+                      type="time"
+                      className="input text-sm py-1"
+                      value={pickerTime}
+                      onChange={e => { setPickerTime(e.target.value); setActiveShortcut(null) }}
+                    />
+                    {/* Different day */}
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-slate-400 hover:text-slate-600 select-none">Different day?</summary>
+                      <input
+                        type="date"
+                        className="input text-sm py-1 mt-1"
+                        value={pickerDate}
+                        max={toDateInput(new Date())}
+                        onChange={e => setPickerDate(e.target.value)}
+                      />
+                    </details>
+                    {/* Actions */}
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" className="btn-secondary text-xs" onClick={() => setShowTimePicker(null)}>
+                        Cancel
+                      </button>
+                      <button type="button" className="btn-primary text-xs" onClick={() => logWithTime(med.id)}>
+                        Log
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
