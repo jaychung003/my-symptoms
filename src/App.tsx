@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Activity, Pill, Utensils, Moon, Dumbbell, LayoutDashboard } from 'lucide-react'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import type { AppData, BowelMovement, Medication, MedicationLog, FoodEntry, SleepEntry, WorkoutEntry } from './types'
@@ -29,7 +29,24 @@ const TABS = [
 
 export default function App() {
   const [data, setData] = useLocalStorage<AppData>('ibd-tracker-v1', INITIAL_DATA)
-  const [activeTab, setActiveTab] = useState('bowel')
+
+  const VALID_TABS = TABS.map(t => t.id)
+  function tabFromHash() {
+    const hash = window.location.hash.replace('#', '')
+    return VALID_TABS.includes(hash) ? hash : 'bowel'
+  }
+  const [activeTab, setActiveTab] = useState(tabFromHash)
+
+  useEffect(() => {
+    const onHashChange = () => setActiveTab(tabFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  function navigate(tab: string) {
+    window.location.hash = tab
+    setActiveTab(tab)
+  }
 
   function update<K extends keyof AppData>(key: K, value: AppData[K]) {
     setData(prev => ({ ...prev, [key]: value }))
@@ -98,7 +115,7 @@ export default function App() {
           {TABS.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => navigate(tab.id)}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 transition-colors whitespace-nowrap min-w-[56px] text-xs ${
                 activeTab === tab.id ? 'tab-active' : 'tab-inactive'
               }`}
@@ -113,7 +130,7 @@ export default function App() {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
         {activeTab === 'dashboard' && (
-          <Dashboard data={data} onTabChange={setActiveTab} />
+          <Dashboard data={data} onTabChange={navigate} />
         )}
         {activeTab === 'bowel' && (
           <BowelLog
