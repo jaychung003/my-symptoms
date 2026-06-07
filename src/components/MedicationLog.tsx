@@ -19,106 +19,104 @@ interface Props {
 
 export default function MedicationLog({ medications, logs, onAddMedication, onDeleteMedication, onLogDose, onDeleteLog }: Props) {
   const [showMedForm, setShowMedForm] = useState(false)
-  const [showLogForm, setShowLogForm] = useState(false)
   const [name, setName] = useState('')
   const [dosage, setDosage] = useState('')
   const [frequency, setFrequency] = useState('')
   const [color, setColor] = useState(MED_COLORS[0])
-  const [selectedMed, setSelectedMed] = useState('')
-  const [logNotes, setLogNotes] = useState('')
-  const [logTime, setLogTime] = useState(() => {
-    const now = new Date()
-    return `${format(now, 'yyyy-MM-dd')}T${format(now, 'HH:mm')}`
-  })
+  // Track which med IDs were just tapped (for brief animation feedback)
+  const [justLogged, setJustLogged] = useState<Set<string>>(new Set())
 
   const todayLogs = logs.filter(l => isToday(parseISO(l.timestamp)))
+
+  function logNow(medId: string) {
+    onLogDose({
+      id: crypto.randomUUID(),
+      medicationId: medId,
+      timestamp: new Date().toISOString(),
+      notes: '',
+    })
+    setJustLogged(prev => new Set(prev).add(medId))
+    setTimeout(() => setJustLogged(prev => { const s = new Set(prev); s.delete(medId); return s }), 1200)
+  }
 
   function handleAddMed(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    onAddMedication({
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      dosage: dosage.trim(),
-      frequency: frequency.trim(),
-      color,
-    })
-    setName('')
-    setDosage('')
-    setFrequency('')
-    setColor(MED_COLORS[0])
-    setShowMedForm(false)
+    onAddMedication({ id: crypto.randomUUID(), name: name.trim(), dosage: dosage.trim(), frequency: frequency.trim(), color })
+    setName(''); setDosage(''); setFrequency(''); setColor(MED_COLORS[0]); setShowMedForm(false)
   }
 
-  function handleLogDose(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedMed) return
-    onLogDose({
-      id: crypto.randomUUID(),
-      medicationId: selectedMed,
-      timestamp: new Date(logTime).toISOString(),
-      notes: logNotes,
-    })
-    setLogNotes('')
-    setShowLogForm(false)
-  }
-
-  function getMedName(id: string) {
-    return medications.find(m => m.id === id)?.name ?? 'Unknown'
-  }
-
-  function getMed(id: string) {
-    return medications.find(m => m.id === id)
-  }
-
-  function takenToday(medId: string) {
-    return todayLogs.some(l => l.medicationId === medId)
+  function getMed(id: string) { return medications.find(m => m.id === id) }
+  function getMedName(id: string) { return getMed(id)?.name ?? 'Unknown' }
+  function todayCount(medId: string) { return todayLogs.filter(l => l.medicationId === medId).length }
+  function lastTakenToday(medId: string) {
+    const entries = todayLogs.filter(l => l.medicationId === medId).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    return entries[0] ? format(parseISO(entries[0].timestamp), 'h:mm a') : null
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="section-title mb-0">Medications</h2>
-        <div className="flex gap-2">
-          <button className="btn-secondary text-sm flex items-center gap-1" onClick={() => setShowMedForm(v => !v)}>
-            <Plus size={14} /> Add Med
-          </button>
-          {medications.length > 0 && (
-            <button className="btn-primary text-sm flex items-center gap-1" onClick={() => setShowLogForm(v => !v)}>
-              <Check size={14} /> Log Dose
-            </button>
-          )}
-        </div>
+        <button className="btn-secondary text-sm flex items-center gap-1.5" onClick={() => setShowMedForm(v => !v)}>
+          <Plus size={14} /> Add Med
+        </button>
       </div>
 
-      {/* Today's medication checklist */}
+      {/* One-tap log cards */}
+      {medications.length === 0 && !showMedForm && (
+        <p className="text-center text-slate-400 py-8">No medications added yet.</p>
+      )}
+
       {medications.length > 0 && (
-        <div className="card">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Today's medications</p>
-          <div className="space-y-2">
-            {medications.map(med => {
-              const taken = takenToday(med.id)
-              const todayCount = todayLogs.filter(l => l.medicationId === med.id).length
-              return (
-                <div key={med.id} className={`flex items-center gap-3 p-2 rounded-lg ${taken ? 'bg-green-50' : 'bg-slate-50'}`}>
-                  <div className={`w-8 h-8 rounded-full ${med.color} flex items-center justify-center shrink-0`}>
-                    <Pill size={14} className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-700">{med.name}</p>
-                    {med.dosage && <p className="text-xs text-slate-500">{med.dosage} · {med.frequency}</p>}
-                  </div>
-                  {taken ? (
-                    <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                      <Check size={12} /> {todayCount}x taken
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slate-400">Not yet</span>
+        <div className="space-y-2">
+          {medications.map(med => {
+            const count = todayCount(med.id)
+            const lastTime = lastTakenToday(med.id)
+            const flash = justLogged.has(med.id)
+            return (
+              <button
+                key={med.id}
+                type="button"
+                onClick={() => logNow(med.id)}
+                className={`w-full card flex items-center gap-3 text-left transition-all active:scale-95 ${
+                  flash ? 'bg-green-50 border-green-300' : count > 0 ? 'bg-slate-50' : 'bg-white'
+                }`}
+              >
+                {/* Color dot */}
+                <div className={`w-11 h-11 rounded-full ${med.color} flex items-center justify-center shrink-0 transition-all ${flash ? 'scale-110' : ''}`}>
+                  {flash
+                    ? <Check size={20} className="text-white" strokeWidth={3} />
+                    : <Pill size={18} className="text-white" />
+                  }
+                </div>
+                {/* Name + info */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-800">{med.name}</p>
+                  {(med.dosage || med.frequency) && (
+                    <p className="text-xs text-slate-500">{[med.dosage, med.frequency].filter(Boolean).join(' · ')}</p>
+                  )}
+                  {lastTime && (
+                    <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
+                      <Check size={10} />
+                      {count > 1 ? `${count}× today · last at ${lastTime}` : `Taken at ${lastTime}`}
+                    </p>
+                  )}
+                  {!lastTime && (
+                    <p className="text-xs text-slate-400 mt-0.5">Tap to log now</p>
                   )}
                 </div>
-              )
-            })}
-          </div>
+                {/* Big tap affordance */}
+                <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
+                  count > 0
+                    ? 'bg-green-500 border-green-500'
+                    : 'bg-white border-slate-200'
+                }`}>
+                  <Check size={16} className={count > 0 ? 'text-white' : 'text-slate-300'} strokeWidth={3} />
+                </div>
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -129,7 +127,7 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
           <form onSubmit={handleAddMed} className="space-y-3">
             <div>
               <label className="label">Medication Name *</label>
-              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Mesalamine" required />
+              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Mesalamine" autoFocus required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -145,12 +143,8 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
               <label className="label">Color</label>
               <div className="flex gap-2">
                 {MED_COLORS.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className={`w-7 h-7 rounded-full ${c} transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-1 ring-slate-400' : ''}`}
-                  />
+                  <button key={c} type="button" onClick={() => setColor(c)}
+                    className={`w-7 h-7 rounded-full ${c} transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-1 ring-slate-400' : ''}`} />
                 ))}
               </div>
             </div>
@@ -162,41 +156,13 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
         </div>
       )}
 
-      {/* Log dose form */}
-      {showLogForm && (
-        <div className="card">
-          <h3 className="font-semibold text-slate-700 mb-3">Log Dose</h3>
-          <form onSubmit={handleLogDose} className="space-y-3">
-            <div>
-              <label className="label">Medication *</label>
-              <select className="input" value={selectedMed} onChange={e => setSelectedMed(e.target.value)} required>
-                <option value="">Select medication...</option>
-                {medications.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} {m.dosage}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Time</label>
-              <input type="datetime-local" className="input" value={logTime} onChange={e => setLogTime(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Notes</label>
-              <input className="input" value={logNotes} onChange={e => setLogNotes(e.target.value)} placeholder="Optional notes..." />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-secondary" onClick={() => setShowLogForm(false)}>Cancel</button>
-              <button type="submit" className="btn-primary">Log</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Medication management */}
+      {/* Manage (delete) */}
       {medications.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Manage medications</p>
-          <div className="space-y-2">
+        <details>
+          <summary className="text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-600">
+            Manage medications
+          </summary>
+          <div className="space-y-2 mt-2">
             {medications.map(med => (
               <div key={med.id} className="card flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full ${med.color} flex items-center justify-center shrink-0`}>
@@ -214,22 +180,19 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {medications.length === 0 && (
-        <p className="text-center text-slate-400 py-8">No medications added yet.</p>
+        </details>
       )}
 
       {/* Recent dose log */}
       {logs.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Recent doses</p>
-          <div className="space-y-2">
+        <details>
+          <summary className="text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-600">
+            Dose history
+          </summary>
+          <div className="space-y-2 mt-2">
             {logs
-              .slice()
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, 20)
+              .slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .slice(0, 30)
               .map(log => {
                 const med = getMed(log.medicationId)
                 return (
@@ -242,7 +205,6 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
                     <div className="flex-1">
                       <p className="text-sm font-medium">{getMedName(log.medicationId)}</p>
                       <p className="text-xs text-slate-500">{format(parseISO(log.timestamp), 'MMM d, h:mm a')}</p>
-                      {log.notes && <p className="text-xs text-slate-400 italic">{log.notes}</p>}
                     </div>
                     <button onClick={() => onDeleteLog(log.id)} className="text-slate-300 hover:text-red-400 transition-colors">
                       <Trash2 size={16} />
@@ -251,7 +213,7 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
                 )
               })}
           </div>
-        </div>
+        </details>
       )}
     </div>
   )
