@@ -1,7 +1,19 @@
 import { useState } from 'react'
-import { format, parseISO, isToday } from 'date-fns'
+import { format, parseISO, isToday, subMinutes, subHours } from 'date-fns'
 import { Droplets, Plus, Trash2, AlertCircle, Clock } from 'lucide-react'
 import type { BowelMovement, BristolScale, BloodLevel, PainLevel } from '../types'
+
+const TIME_SHORTCUTS = [
+  { label: 'Just now', offset: () => new Date() },
+  { label: '15 min ago', offset: () => subMinutes(new Date(), 15) },
+  { label: '30 min ago', offset: () => subMinutes(new Date(), 30) },
+  { label: '1 hr ago', offset: () => subHours(new Date(), 1) },
+  { label: '2 hrs ago', offset: () => subHours(new Date(), 2) },
+]
+
+function toLocalInput(d: Date) {
+  return `${format(d, 'yyyy-MM-dd')}T${format(d, 'HH:mm')}`
+}
 
 const BRISTOL_DESCRIPTIONS: Record<BristolScale, { label: string; color: string; desc: string }> = {
   1: { label: 'Type 1', color: 'bg-amber-900 text-white', desc: 'Separate hard lumps' },
@@ -46,10 +58,9 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
   const [pain, setPain] = useState<PainLevel>(0)
   const [urgency, setUrgency] = useState(false)
   const [notes, setNotes] = useState('')
-  const [timestamp, setTimestamp] = useState(() => {
-    const now = new Date()
-    return `${format(now, 'yyyy-MM-dd')}T${format(now, 'HH:mm')}`
-  })
+  const [timestamp, setTimestamp] = useState(() => toLocalInput(new Date()))
+  const [showCustomTime, setShowCustomTime] = useState(false)
+  const [activeShortcut, setActiveShortcut] = useState(0)
 
   const todayEntries = entries.filter(e => isToday(parseISO(e.timestamp)))
 
@@ -70,7 +81,9 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
     setBlood('none')
     setBristol(4)
     setUrgency(false)
-    setTimestamp(`${format(new Date(), 'yyyy-MM-dd')}T${format(new Date(), 'HH:mm')}`)
+    setTimestamp(toLocalInput(new Date()))
+    setActiveShortcut(0)
+    setShowCustomTime(false)
   }
 
   return (
@@ -109,13 +122,54 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
           <h3 className="font-semibold text-slate-700 mb-3">Log Bowel Movement</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Time</label>
-              <input
-                type="datetime-local"
-                className="input"
-                value={timestamp}
-                onChange={e => setTimestamp(e.target.value)}
-              />
+              <label className="label flex items-center gap-1.5">
+                <Clock size={13} /> When?
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {TIME_SHORTCUTS.map((s, i) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() => {
+                      setActiveShortcut(i)
+                      setTimestamp(toLocalInput(s.offset()))
+                      setShowCustomTime(false)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
+                      activeShortcut === i && !showCustomTime
+                        ? 'bg-sky-600 text-white border-sky-600'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setShowCustomTime(v => !v); setActiveShortcut(-1) }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
+                    showCustomTime
+                      ? 'bg-sky-600 text-white border-sky-600'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  Custom…
+                </button>
+              </div>
+              {showCustomTime && (
+                <input
+                  type="datetime-local"
+                  className="input mt-2"
+                  value={timestamp}
+                  onChange={e => setTimestamp(e.target.value)}
+                />
+              )}
+              {!showCustomTime && (
+                <p className="text-xs text-slate-400 mt-1">
+                  <Clock size={10} className="inline mr-0.5" />
+                  {format(new Date(timestamp), 'h:mm a')}
+                </p>
+              )}
             </div>
 
             <div>
