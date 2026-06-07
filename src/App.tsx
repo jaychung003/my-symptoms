@@ -19,17 +19,17 @@ const INITIAL_DATA: AppData = {
 }
 
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { id: 'bowel', label: 'BMs', Icon: Activity },
   { id: 'medications', label: 'Meds', Icon: Pill },
   { id: 'food', label: 'Food', Icon: Utensils },
   { id: 'sleep', label: 'Sleep', Icon: Moon },
   { id: 'workout', label: 'Workout', Icon: Dumbbell },
+  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
 ]
 
 export default function App() {
   const [data, setData] = useLocalStorage<AppData>('ibd-tracker-v1', INITIAL_DATA)
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState('bowel')
 
   function update<K extends keyof AppData>(key: K, value: AppData[K]) {
     setData(prev => ({ ...prev, [key]: value }))
