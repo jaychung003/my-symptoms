@@ -59,7 +59,8 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
   const [urgency, setUrgency] = useState(false)
   const [notes, setNotes] = useState('')
   const [timestamp, setTimestamp] = useState(() => toLocalInput(new Date()))
-  const [showCustomTime, setShowCustomTime] = useState(false)
+  const [showTimePicker, setShowTimePicker] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const [activeShortcut, setActiveShortcut] = useState(0)
 
   const todayEntries = entries.filter(e => isToday(parseISO(e.timestamp)))
@@ -83,7 +84,8 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
     setUrgency(false)
     setTimestamp(toLocalInput(new Date()))
     setActiveShortcut(0)
-    setShowCustomTime(false)
+    setShowTimePicker(false)
+    setShowDatePicker(false)
   }
 
   return (
@@ -133,10 +135,11 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
                     onClick={() => {
                       setActiveShortcut(i)
                       setTimestamp(toLocalInput(s.offset()))
-                      setShowCustomTime(false)
+                      setShowTimePicker(false)
+                      setShowDatePicker(false)
                     }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
-                      activeShortcut === i && !showCustomTime
+                      activeShortcut === i && !showTimePicker
                         ? 'bg-sky-600 text-white border-sky-600'
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
@@ -146,29 +149,58 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
                 ))}
                 <button
                   type="button"
-                  onClick={() => { setShowCustomTime(v => !v); setActiveShortcut(-1) }}
+                  onClick={() => { setShowTimePicker(v => !v); setActiveShortcut(-1); setShowDatePicker(false) }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
-                    showCustomTime
+                    showTimePicker
                       ? 'bg-sky-600 text-white border-sky-600'
                       : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                   }`}
                 >
-                  Custom…
+                  Other time
                 </button>
               </div>
-              {showCustomTime && (
+              {showTimePicker && (
                 <input
-                  type="datetime-local"
+                  type="time"
                   className="input mt-2"
-                  value={timestamp}
-                  onChange={e => setTimestamp(e.target.value)}
+                  value={format(new Date(timestamp), 'HH:mm')}
+                  onChange={e => {
+                    const [h, m] = e.target.value.split(':')
+                    const d = new Date(timestamp)
+                    d.setHours(Number(h), Number(m))
+                    setTimestamp(toLocalInput(d))
+                  }}
                 />
               )}
-              {!showCustomTime && (
-                <p className="text-xs text-slate-400 mt-1">
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-xs text-slate-400">
                   <Clock size={10} className="inline mr-0.5" />
                   {format(new Date(timestamp), 'h:mm a')}
+                  {!isToday(new Date(timestamp)) && (
+                    <span className="ml-1 text-amber-500">{format(new Date(timestamp), 'MMM d')}</span>
+                  )}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setShowDatePicker(v => !v)}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+                >
+                  different day?
+                </button>
+              </div>
+              {showDatePicker && (
+                <input
+                  type="date"
+                  className="input mt-1"
+                  value={format(new Date(timestamp), 'yyyy-MM-dd')}
+                  onChange={e => {
+                    const d = new Date(timestamp)
+                    const [y, mo, day] = e.target.value.split('-').map(Number)
+                    d.setFullYear(y, mo - 1, day)
+                    setTimestamp(toLocalInput(d))
+                  }}
+                  max={format(new Date(), 'yyyy-MM-dd')}
+                />
               )}
             </div>
 
