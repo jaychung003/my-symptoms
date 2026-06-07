@@ -270,53 +270,85 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
       )}
 
       {/* Entry list */}
-      <div className="space-y-2">
-        {entries.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No entries yet. Log your first BM above.</p>
-        )}
-        {entries
-          .slice()
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .map(entry => (
-            <div key={entry.id} className="card flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${BRISTOL_DESCRIPTIONS[entry.bristolScale].color}`}>
-                T{entry.bristolScale}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-slate-700">
-                    {format(parseISO(entry.timestamp), 'MMM d, h:mm a')}
-                  </span>
-                  {entry.urgency && (
-                    <span className="flex items-center gap-0.5 text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
-                      <AlertCircle size={11} /> Urgent
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${bloodColor(entry.bloodLevel)}`}>
-                    <span className="flex items-center gap-1">
-                      <Droplets size={11} /> {entry.bloodLevel === 'none' ? 'No blood' : `Blood: ${entry.bloodLevel}`}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1 text-xs text-slate-600">
-                    <div className={`w-2 h-2 rounded-full ${painColor(entry.painLevel)}`} />
-                    Pain {entry.painLevel}/10
-                  </span>
-                  <span className="text-xs text-slate-400">{BRISTOL_DESCRIPTIONS[entry.bristolScale].desc}</span>
-                </div>
-                {entry.notes && <p className="text-xs text-slate-500 mt-1 italic">{entry.notes}</p>}
-              </div>
-              <button
-                onClick={() => onDelete(entry.id)}
-                className="text-slate-300 hover:text-red-400 transition-colors shrink-0"
-                aria-label="Delete"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
-      </div>
+      {entries.length === 0 && (
+        <p className="text-center text-slate-400 py-8">No entries yet. Log your first BM above.</p>
+      )}
+
+      {/* Today */}
+      {todayEntries.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Today</p>
+          <div className="space-y-2">
+            {todayEntries
+              .slice()
+              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .map(entry => (
+                <EntryCard key={entry.id} entry={entry} onDelete={onDelete} showDate={false} />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Previous */}
+      {entries.some(e => !isToday(parseISO(e.timestamp))) && (
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Previous</p>
+          <div className="space-y-2">
+            {entries
+              .filter(e => !isToday(parseISO(e.timestamp)))
+              .slice()
+              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .map(entry => (
+                <EntryCard key={entry.id} entry={entry} onDelete={onDelete} showDate={true} />
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
+function EntryCard({ entry, onDelete, showDate }: { entry: BowelMovement; onDelete: (id: string) => void; showDate: boolean }) {
+  return (
+        <div className="card flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${BRISTOL_DESCRIPTIONS[entry.bristolScale].color}`}>
+            T{entry.bristolScale}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-slate-700">
+                {showDate
+                  ? format(parseISO(entry.timestamp), 'EEE MMM d, h:mm a')
+                  : format(parseISO(entry.timestamp), 'h:mm a')}
+              </span>
+              {entry.urgency && (
+                <span className="flex items-center gap-0.5 text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                  <AlertCircle size={11} /> Urgent
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={`text-xs px-2 py-0.5 rounded font-medium ${bloodColor(entry.bloodLevel)}`}>
+                <span className="flex items-center gap-1">
+                  <Droplets size={11} /> {entry.bloodLevel === 'none' ? 'No blood' : `Blood: ${entry.bloodLevel}`}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-xs text-slate-600">
+                <div className={`w-2 h-2 rounded-full ${painColor(entry.painLevel)}`} />
+                Pain {entry.painLevel}/10
+              </span>
+              <span className="text-xs text-slate-400">{BRISTOL_DESCRIPTIONS[entry.bristolScale].desc}</span>
+            </div>
+            {entry.notes && <p className="text-xs text-slate-500 mt-1 italic">{entry.notes}</p>}
+          </div>
+          <button
+            onClick={() => onDelete(entry.id)}
+            className="text-slate-300 hover:text-red-400 transition-colors shrink-0"
+            aria-label="Delete"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+  )
+}
+
