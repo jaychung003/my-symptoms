@@ -98,8 +98,8 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
         </button>
       </div>
 
-      {/* Today summary */}
-      <div className="card">
+      {/* Today summary — hidden while form is open */}
+      {!showForm && <div className="card">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Today</p>
         {todayEntries.length === 0 ? (
           <p className="text-sm text-slate-400">No BMs logged yet today.</p>
@@ -157,7 +157,7 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
             </div>
           )
         })()}
-      </div>
+      </div>}
 
       {/* Add form */}
       {showForm && (
