@@ -99,23 +99,64 @@ export default function BowelLog({ entries, onAdd, onDelete }: Props) {
       </div>
 
       {/* Today summary */}
-      <div className="card flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-sky-50 flex flex-col items-center justify-center border-2 border-sky-200">
-          <span className="text-2xl font-bold text-sky-700">{todayEntries.length}</span>
-        </div>
-        <div>
-          <p className="font-semibold text-slate-700">Today's count</p>
-          {todayEntries.length > 0 && (
-            <p className="text-sm text-slate-500">
-              Avg pain: {(todayEntries.reduce((s, e) => s + e.painLevel, 0) / todayEntries.length).toFixed(1)} ·{' '}
-              {todayEntries.some(e => e.bloodLevel !== 'none') ? (
-                <span className="text-red-500">Blood detected</span>
-              ) : (
-                <span className="text-green-600">No blood</span>
-              )}
-            </p>
-          )}
-        </div>
+      <div className="card">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Today</p>
+        {todayEntries.length === 0 ? (
+          <p className="text-sm text-slate-400">No BMs logged yet today.</p>
+        ) : (() => {
+          const avgPain = todayEntries.reduce((s, e) => s + e.painLevel, 0) / todayEntries.length
+          const maxBloodIdx = Math.max(...todayEntries.map(e => BLOOD_LEVELS.findIndex(b => b.value === e.bloodLevel)))
+          const worstBlood = BLOOD_LEVELS[maxBloodIdx]
+          const bristolToday = todayEntries
+            .slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            .map(e => e.bristolScale)
+          return (
+            <div className="space-y-3">
+              {/* Count + pain row */}
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center border-2 border-sky-200 shrink-0">
+                  <span className="text-xl font-bold text-sky-700">{todayEntries.length}</span>
+                </div>
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  {/* Pain */}
+                  <div className="bg-slate-50 rounded-lg px-3 py-2">
+                    <p className="text-xs text-slate-500 mb-0.5">Avg pain</p>
+                    <p className={`text-lg font-bold ${avgPain <= 2 ? 'text-green-600' : avgPain <= 5 ? 'text-amber-500' : 'text-red-500'}`}>
+                      {avgPain.toFixed(1)}<span className="text-xs font-normal text-slate-400">/10</span>
+                    </p>
+                  </div>
+                  {/* Blood */}
+                  <div className={`rounded-lg px-3 py-2 ${worstBlood.color}`}>
+                    <p className="text-xs mb-0.5 opacity-70">Blood</p>
+                    <p className="text-sm font-semibold flex items-center gap-1">
+                      <Droplets size={13} />
+                      {worstBlood.value === 'none' ? 'None' : worstBlood.label}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {/* Bristol scale chips */}
+              <div>
+                <p className="text-xs text-slate-500 mb-1.5">Bristol scale</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {bristolToday.map((scale, i) => (
+                    <span key={i} className={`text-xs font-bold px-2.5 py-1 rounded-lg ${BRISTOL_DESCRIPTIONS[scale].color}`}>
+                      T{scale}
+                    </span>
+                  ))}
+                  <span className="text-xs text-slate-400 self-center ml-1">
+                    {(() => {
+                      const counts: Partial<Record<BristolScale, number>> = {}
+                      bristolToday.forEach(s => { counts[s] = (counts[s] ?? 0) + 1 })
+                      const mostCommon = (Object.entries(counts) as [string, number][]).sort((a, b) => b[1] - a[1])[0]
+                      return mostCommon && Number(mostCommon[0]) ? `· ${BRISTOL_DESCRIPTIONS[Number(mostCommon[0]) as BristolScale].desc}` : ''
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Add form */}
