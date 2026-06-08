@@ -55,6 +55,9 @@ export default function App() {
   function addBM(entry: BowelMovement) {
     update('bowelMovements', [...data.bowelMovements, entry])
   }
+  function updateBM(entry: BowelMovement) {
+    update('bowelMovements', data.bowelMovements.map(e => e.id === entry.id ? entry : e))
+  }
   function deleteBM(id: string) {
     update('bowelMovements', data.bowelMovements.filter(e => e.id !== id))
   }
@@ -136,6 +139,7 @@ export default function App() {
           <BowelLog
             entries={data.bowelMovements}
             onAdd={addBM}
+            onUpdate={updateBM}
             onDelete={deleteBM}
           />
         )}
