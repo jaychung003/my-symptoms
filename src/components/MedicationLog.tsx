@@ -295,35 +295,54 @@ export default function MedicationLog({ medications, logs, onAddMedication, onDe
         </details>
       )}
 
-      {/* Recent dose log */}
+      {/* Recent dose log grouped by day */}
       {logs.length > 0 && (
         <details>
           <summary className="text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-600">
             Dose history
           </summary>
-          <div className="space-y-2 mt-2">
-            {logs
-              .slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, 30)
-              .map(log => {
-                const med = getMed(log.medicationId)
-                return (
-                  <div key={log.id} className="card flex items-center gap-3">
-                    {med && (
-                      <div className={`w-7 h-7 rounded-full ${med.color} flex items-center justify-center shrink-0`}>
-                        <Pill size={12} className="text-white" />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{getMedName(log.medicationId)}</p>
-                      <p className="text-xs text-slate-500">{format(parseISO(log.timestamp), 'MMM d, h:mm a')}</p>
-                    </div>
-                    <button onClick={() => onDeleteLog(log.id)} className="text-slate-300 hover:text-red-400 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
+          <div className="space-y-3 mt-2">
+            {(() => {
+              const todayKey = format(new Date(), 'yyyy-MM-dd')
+              const groups = new Map<string, typeof logs>()
+              logs
+                .slice()
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .slice(0, 60)
+                .forEach(log => {
+                  const key = format(parseISO(log.timestamp), 'yyyy-MM-dd')
+                  if (!groups.has(key)) groups.set(key, [])
+                  groups.get(key)!.push(log)
+                })
+              return Array.from(groups.entries()).map(([dateKey, dayLogs]) => (
+                <div key={dateKey}>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                    {dateKey === todayKey ? 'Today' : format(parseISO(dateKey), 'EEE, MMM d')}
+                  </p>
+                  <div className="space-y-2">
+                    {dayLogs.map(log => {
+                      const med = getMed(log.medicationId)
+                      return (
+                        <div key={log.id} className="card flex items-center gap-3">
+                          {med && (
+                            <div className={`w-7 h-7 rounded-full ${med.color} flex items-center justify-center shrink-0`}>
+                              <Pill size={12} className="text-white" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{getMedName(log.medicationId)}</p>
+                            <p className="text-xs text-slate-500">{format(parseISO(log.timestamp), 'h:mm a')}</p>
+                          </div>
+                          <button onClick={() => onDeleteLog(log.id)} className="text-slate-300 hover:text-red-400 transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
+                </div>
+              ))
+            })()}
           </div>
         </details>
       )}

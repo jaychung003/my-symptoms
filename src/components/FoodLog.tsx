@@ -187,41 +187,58 @@ export default function FoodLog({ entries, onAdd, onDelete }: Props) {
         </div>
       )}
 
-      {/* Entry list */}
-      <div className="space-y-2">
-        {entries.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No food entries yet.</p>
-        )}
-        {entries
+      {/* Entry list grouped by day */}
+      {entries.length === 0 && (
+        <p className="text-center text-slate-400 py-8">No food entries yet.</p>
+      )}
+
+      {entries.length > 0 && (() => {
+        const todayKey = format(new Date(), 'yyyy-MM-dd')
+        const groups = new Map<string, typeof entries>()
+        entries
           .slice()
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .map(entry => {
-            const c = RISK_CONFIG[entry.risk]
-            return (
-              <div key={entry.id} className={`card border flex items-start gap-3 ${c.bg} ${c.border}`}>
-                <c.Icon size={18} className={`shrink-0 mt-0.5 ${c.color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-slate-800">{entry.name}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${c.bg} ${c.border} ${c.color}`}>
-                      {c.label}
-                    </span>
-                    {entry.category && (
-                      <span className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border font-medium ${c.bg} ${c.border} ${c.color} opacity-80`}>
-                        <Tag size={9} />{entry.category}
-                      </span>
-                    )}
+          .forEach(entry => {
+            const key = format(parseISO(entry.timestamp), 'yyyy-MM-dd')
+            if (!groups.has(key)) groups.set(key, [])
+            groups.get(key)!.push(entry)
+          })
+        return Array.from(groups.entries()).map(([dateKey, dayEntries]) => (
+          <div key={dateKey}>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              {dateKey === todayKey ? 'Today' : format(parseISO(dateKey), 'EEE, MMM d')}
+            </p>
+            <div className="space-y-2">
+              {dayEntries.map(entry => {
+                const c = RISK_CONFIG[entry.risk]
+                return (
+                  <div key={entry.id} className={`card border flex items-start gap-3 ${c.bg} ${c.border}`}>
+                    <c.Icon size={18} className={`shrink-0 mt-0.5 ${c.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-slate-800">{entry.name}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${c.bg} ${c.border} ${c.color}`}>
+                          {c.label}
+                        </span>
+                        {entry.category && (
+                          <span className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border font-medium ${c.bg} ${c.border} ${c.color} opacity-80`}>
+                            <Tag size={9} />{entry.category}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">{format(parseISO(entry.timestamp), 'h:mm a')}</p>
+                      {entry.notes && <p className="text-xs text-slate-500 italic mt-0.5">{entry.notes}</p>}
+                    </div>
+                    <button onClick={() => onDelete(entry.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{format(parseISO(entry.timestamp), 'MMM d, h:mm a')}</p>
-                  {entry.notes && <p className="text-xs text-slate-500 italic mt-0.5">{entry.notes}</p>}
-                </div>
-                <button onClick={() => onDelete(entry.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )
-          })}
-      </div>
+                )
+              })}
+            </div>
+          </div>
+        ))
+      })()}
     </div>
   )
 }

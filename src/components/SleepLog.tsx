@@ -185,40 +185,54 @@ export default function SleepLog({ entries, onAdd, onDelete }: Props) {
         </div>
       )}
 
-      {/* Entry list */}
-      <div className="space-y-2">
-        {entries.length === 0 && (
-          <p className="text-center text-slate-400 py-8">No sleep entries yet.</p>
-        )}
-        {entries
+      {/* Entry list grouped by day */}
+      {entries.length === 0 && (
+        <p className="text-center text-slate-400 py-8">No sleep entries yet.</p>
+      )}
+
+      {entries.length > 0 && (() => {
+        const groups = new Map<string, typeof entries>()
+        entries
           .slice()
           .sort((a, b) => b.date.localeCompare(a.date))
-          .map(entry => {
-            const config = QUALITY_CONFIG[entry.quality]
-            return (
-              <div key={entry.id} className="card flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                  <Moon size={18} className="text-indigo-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-700">{format(parseISO(entry.date + 'T12:00:00'), 'EEE, MMM d')}</p>
-                    <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
+          .forEach(entry => {
+            if (!groups.has(entry.date)) groups.set(entry.date, [])
+            groups.get(entry.date)!.push(entry)
+          })
+        return Array.from(groups.entries()).map(([dateKey, dayEntries]) => (
+          <div key={dateKey}>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              {dateKey === today ? 'Today' : format(parseISO(dateKey + 'T12:00:00'), 'EEE, MMM d')}
+            </p>
+            <div className="space-y-2">
+              {dayEntries.map(entry => {
+                const config = QUALITY_CONFIG[entry.quality]
+                return (
+                  <div key={entry.id} className="card flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                      <Moon size={18} className="text-indigo-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${hoursColor(entry.hours)}`}>{entry.hours}h</span>
+                        <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
+                      </div>
+                      <p className="text-sm text-slate-500">
+                        {entry.bedtime} → {entry.wakeTime}
+                        {entry.interruptions > 0 && ` · ${entry.interruptions} wake-up${entry.interruptions > 1 ? 's' : ''}`}
+                      </p>
+                      {entry.notes && <p className="text-xs text-slate-400 italic mt-0.5">{entry.notes}</p>}
+                    </div>
+                    <button onClick={() => onDelete(entry.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <p className="text-sm text-slate-500">
-                    <span className={`font-semibold ${hoursColor(entry.hours)}`}>{entry.hours}h</span>
-                    {' · '}{entry.bedtime} → {entry.wakeTime}
-                    {entry.interruptions > 0 && ` · ${entry.interruptions} wake-up${entry.interruptions > 1 ? 's' : ''}`}
-                  </p>
-                  {entry.notes && <p className="text-xs text-slate-400 italic mt-0.5">{entry.notes}</p>}
-                </div>
-                <button onClick={() => onDelete(entry.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )
-          })}
-      </div>
+                )
+              })}
+            </div>
+          </div>
+        ))
+      })()}
     </div>
   )
 }
