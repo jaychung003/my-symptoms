@@ -181,41 +181,35 @@ export default function BowelLog({ entries, onAdd, onUpdate, onDelete }: Props) 
         </div>
       )}
 
-      {/* Entry list */}
+      {/* Entry list grouped by day */}
       {entries.length === 0 && (
         <p className="text-center text-slate-400 py-8">No entries yet. Log your first BM above.</p>
       )}
 
-      {/* Today */}
-      {todayEntries.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Today</p>
-          <div className="space-y-2">
-            {todayEntries
-              .slice()
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .map(entry => (
+      {entries.length > 0 && (() => {
+        const todayKey = format(new Date(), 'yyyy-MM-dd')
+        const groups = new Map<string, BowelMovement[]>()
+        entries
+          .slice()
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .forEach(entry => {
+            const key = format(parseISO(entry.timestamp), 'yyyy-MM-dd')
+            if (!groups.has(key)) groups.set(key, [])
+            groups.get(key)!.push(entry)
+          })
+        return Array.from(groups.entries()).map(([dateKey, dayEntries]) => (
+          <div key={dateKey}>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              {dateKey === todayKey ? 'Today' : format(parseISO(dateKey), 'EEE, MMM d')}
+            </p>
+            <div className="space-y-2">
+              {dayEntries.map(entry => (
                 <EntryCard key={entry.id} entry={entry} onDelete={onDelete} onUpdate={onUpdate} showDate={false} />
               ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Previous */}
-      {entries.some(e => !isToday(parseISO(e.timestamp))) && (
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Previous</p>
-          <div className="space-y-2">
-            {entries
-              .filter(e => !isToday(parseISO(e.timestamp)))
-              .slice()
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .map(entry => (
-                <EntryCard key={entry.id} entry={entry} onDelete={onDelete} onUpdate={onUpdate} showDate={true} />
-              ))}
-          </div>
-        </div>
-      )}
+        ))
+      })()}
     </div>
   )
 }
