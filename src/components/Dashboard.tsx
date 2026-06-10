@@ -67,7 +67,7 @@ export default function Dashboard({ data, onTabChange }: Props) {
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = subDays(today, 6 - i)
     const dateStr = format(d, 'yyyy-MM-dd')
-    const bms = data.bowelMovements.filter(e => e.timestamp.startsWith(dateStr))
+    const bms = data.bowelMovements.filter(e => format(parseISO(e.timestamp), 'yyyy-MM-dd') === dateStr)
     const avgPain = bms.length > 0 ? bms.reduce((s, e) => s + e.painLevel, 0) / bms.length : null
     const worstBlood = bms.length > 0
       ? bms.reduce<BloodLevel>((worst, e) =>
